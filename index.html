@@ -248,8 +248,15 @@ function buildAccessStep(){
   h2+='<div class="access-card">';
   h2+='<div class="access-card-title">⚫ GitHub</div>';
   h2+='<label class="access-label">GitHub repo (owner/repo)</label><input class="access-input" id="a_gh_repo" placeholder="owner/repo-name" value="'+esc(flds.a_gh_repo||flds.gh_url||'')+'"><br><br>';
-  h2+='<label class="access-label">GitHub token (optional for public repos)</label><input class="access-input" id="a_gh_token" type="password" placeholder="ghp_••••••••" value="'+esc(flds.a_gh_token||'')+'"><br>';
-  h2+='<div style="font-size:10px;color:var(--muted);margin-top:4px">Fine-grained token: github.com → Settings → Developer settings</div>';
+  h2+='<label class="access-label">GitHub token (optional for public repos)</label><input class="access-input" id="a_gh_token" type="password" placeholder="ghp_••••••••" value="'+esc(flds.a_gh_token||'')+'"><br><br>';
+  h2+='<div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px;margin-top:4px">';
+  h2+='<div style="font-size:10px;font-weight:700;color:var(--neo4j);margin-bottom:8px">⑂ Diff — what changed between versions</div>';
+  h2+='<label class="access-label">Compare FROM (old version)</label>';
+  h2+='<input class="access-input" id="a_gh_base" placeholder="main, v1.0.0, abc1234 (leave blank for last commit)" value="'+esc(flds.a_gh_base||'')+'"><br><br>';
+  h2+='<label class="access-label">Compare TO (new version)</label>';
+  h2+='<input class="access-input" id="a_gh_head" placeholder="HEAD, feature/branch, def5678 (default: HEAD)" value="'+esc(flds.a_gh_head||'')+'"><br>';
+  h2+='<div style="font-size:10px;color:var(--muted);margin-top:4px">Example: FROM=main TO=feature/inventory — reads every line that changed between those two branches</div>';
+  h2+='</div>';
   h2+='</div>';
 
   // API / Backend
@@ -336,7 +343,7 @@ function collectStep(s){
   // Collect inputs from whatever step is currently displayed
   var ids={
     3:['app_url','appname','desc','change','gh_url','jira_key','mods'],
-    5:['a_jira_url','a_jira_email','a_jira_token','a_gh_repo','a_gh_token',
+    5:['a_jira_url','a_jira_email','a_jira_token','a_gh_repo','a_gh_token','a_gh_base','a_gh_head',
        'a_api_url','a_api_token','a_swagger','a_staging','a_notes']
   };
   (ids[s]||[]).forEach(function(id){
@@ -394,6 +401,8 @@ async function generate(){
     testTypes:tests,
     githubRepo:flds.a_gh_repo||flds.gh_url||'',
     githubToken:flds.a_gh_token||'',
+    compareFrom:flds.a_gh_base||'',
+    compareTo:flds.a_gh_head||'',
     jiraProjectKey:flds.jira_key||'',
     jiraBaseUrl:flds.a_jira_url||'',
     jiraEmail:flds.a_jira_email||'',
@@ -459,6 +468,21 @@ function renderResults(p){
   (p.sourcesUsed||[]).forEach(function(s){var cls=/neo4j/i.test(s)?'sp-neo4j':/pine/i.test(s)?'sp-pine':'sp-claude';h+='<div class="src-pill '+cls+'">'+esc(s)+'</div>';});
   h+='</div><div style="font-size:11px;color:var(--muted);margin-top:10px;line-height:1.6">'+esc(p.summary||'')+'</div>';
   h+='<div style="font-size:11px;color:var(--muted);margin-top:8px">Neo4j: '+(p.neo4jSummary?p.neo4jSummary.nodesCreatedOrMerged:0)+' nodes / '+(p.neo4jSummary?p.neo4jSummary.relationshipsCreatedOrMerged:0)+' rels merged · Pinecone: '+(p.pineconeSummary?p.pineconeSummary.matchesReturned:0)+' matches</div>';
+  // GitHub diff summary
+  if(p.githubDiffSummary&&p.githubDiffSummary.ok){
+    var gd=p.githubDiffSummary;
+    h+='<div style="font-size:11px;margin-top:6px;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:6px">';
+    h+='<span style="color:var(--ok);font-weight:700">⑂ GitHub diff: </span>';
+    h+=esc(gd.filesChanged)+' files changed · '+esc(gd.totalCommits)+' commit(s)';
+    if(gd.base){h+=' · '+esc(gd.base)+'...'+esc(gd.head||'HEAD');}
+    if(gd.moduleHints&&gd.moduleHints.length){h+='<br><span style="color:var(--muted)">Modules inferred: </span>'+esc(gd.moduleHints.join(', '));}
+    if(gd.commits&&gd.commits.length){
+      h+='<details style="margin-top:6px"><summary style="cursor:pointer;font-size:10px;color:var(--muted)">▶ '+gd.commits.length+' commit message(s)</summary>';
+      gd.commits.forEach(function(c){h+='<div style="font-size:10px;color:var(--muted);padding:2px 0">• '+esc(c)+'</div>';});
+      h+='</details>';
+    }
+    h+='</div>';
+  }
   if(p.neo4jSummary&&p.neo4jSummary.error){h+='<div style="font-size:11px;color:var(--danger);margin-top:6px;padding:8px 10px;background:var(--danger-dim);border-radius:6px;border:1px solid var(--danger)">⚠ Neo4j error: '+esc(p.neo4jSummary.error)+'<br><span style="color:var(--muted)">Fix: check NEO4J_QUERY_URL is the Cypher URL (not the GraphQL URL). It must end in /db/neo4j/query/v2 or /db/neo4j/tx/commit</span></div>';}
   h+='</div></div></div></div>';
 
